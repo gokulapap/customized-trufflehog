@@ -62,7 +62,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			s1 := detectors.Result{
 				DetectorType: detectorspb.DetectorType_Twilio,
 				Raw:          []byte(apiKey),
-				RawV2:        []byte(apiKey + secret),
+				RawV2:        []byte(apiKey + ":" + secret),
 				Redacted:     secret[:5] + "...",
 				ExtraData:    make(map[string]string),
 			}
