@@ -57,7 +57,11 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			s1 := detectors.Result{
 				DetectorType: detectorspb.DetectorType_Bitmex,
 				Raw:          []byte(resSecretMatch),
-				RawV2:        []byte(resMatch + resSecretMatch),
+				AnalysisInfo: map[string]string{
+					"key":    resMatch,
+					"secret": resSecretMatch,
+				},
+				RawV2: []byte(resMatch + resSecretMatch),
 			}
 
 			if verify {

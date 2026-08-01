@@ -70,6 +70,11 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 				s1 := detectors.Result{
 					DetectorType: detectorspb.DetectorType_Couchbase,
 					Raw:          fmt.Appendf([]byte(""), "%s:%s@%s", username, password, connString),
+					AnalysisInfo: map[string]string{
+						"host":     connString,
+						"username": username,
+						"password": password,
+					},
 				}
 
 				if verify {

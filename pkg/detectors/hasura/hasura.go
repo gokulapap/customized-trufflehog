@@ -65,7 +65,11 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			s1 := detectors.Result{
 				DetectorType: detectorspb.DetectorType_Hasura,
 				Raw:          []byte(key),
-				RawV2:        fmt.Appendf([]byte(""), "%s:%s", domain, key),
+				AnalysisInfo: map[string]string{
+					"domain": domain,
+					"key":    key,
+				},
+				RawV2: fmt.Appendf([]byte(""), "%s:%s", domain, key),
 			}
 
 			if verify {
@@ -91,7 +95,7 @@ func (s Scanner) Type() detectorspb.DetectorType {
 }
 
 func (s Scanner) Description() string {
-	return `Hasura is an open-source engine that instantly generates GraphQL and REST APIs over PostgreSQL (and other databases). 
+	return `Hasura is an open-source engine that instantly generates GraphQL and REST APIs over PostgreSQL (and other databases).
 	It allows you to query, mutate, and subscribe to data in real time. Admin secrets (or admin keys) are used to securely access
 	and manage Hasura projects, giving full control over data, metadata, and schema.`
 }

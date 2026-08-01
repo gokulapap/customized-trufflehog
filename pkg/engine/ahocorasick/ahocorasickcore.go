@@ -8,6 +8,7 @@ import (
 
 	"github.com/trufflesecurity/trufflehog/v3/pkg/custom_detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
+	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors/filedump"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
 )
 
@@ -132,6 +133,7 @@ type Core struct {
 	// some consuming code a little cleaner.)
 	keywordsToDetectors map[string][]DetectorKey
 	detectorsByKey      map[DetectorKey]detectors.Detector
+	filenameMatchers    []DetectorKey
 	spanCalculator      spanCalculator // Strategy for calculating match spans
 }
 
@@ -142,6 +144,7 @@ func NewAhoCorasickCore(allDetectors []detectors.Detector, opts ...CoreOption) *
 	keywordsToDetectors := make(map[string][]DetectorKey)
 	detectorsByKey := make(map[DetectorKey]detectors.Detector, len(allDetectors))
 	var keywords []string
+	var filenameMatchers []DetectorKey
 	for _, d := range allDetectors {
 		key := CreateDetectorKey(d)
 		detectorsByKey[key] = d
@@ -150,13 +153,17 @@ func NewAhoCorasickCore(allDetectors []detectors.Detector, opts ...CoreOption) *
 			keywords = append(keywords, kwLower)
 			keywordsToDetectors[kwLower] = append(keywordsToDetectors[kwLower], key)
 		}
+		if _, ok := d.(detectors.FilenameMatcher); ok {
+			filenameMatchers = append(filenameMatchers, key)
+		}
 	}
 
 	const defaultOffsetRadius int64 = 512
 	core := &Core{
 		keywordsToDetectors: keywordsToDetectors,
 		detectorsByKey:      detectorsByKey,
-		prefilter:           *ahocorasick.NewTrieBuilder().AddStrings(keywords).Build(),
+		filenameMatchers:    filenameMatchers,
+		prefilter:           buildPrefilter(keywords),
 		spanCalculator:      newAdjustableSpanCalculator(defaultOffsetRadius), // Default span calculator
 	}
 
@@ -301,4 +308,40 @@ func CreateDetectorKey(d detectors.Detector) DetectorKey {
 
 func (ac *Core) KeywordsToDetectors() map[string][]DetectorKey {
 	return ac.keywordsToDetectors
+}
+
+// FindFilenameMatches returns detectors whose FilenamePatterns match filePath.
+// Each match uses the entire chunk as the match span so whole-file contents are scanned.
+func (ac *Core) FindFilenameMatches(filePath string, chunkData []byte) []*DetectorMatch {
+	if filePath == "" || len(ac.filenameMatchers) == 0 || len(chunkData) == 0 {
+		return nil
+	}
+
+	var matches []*DetectorMatch
+	for _, key := range ac.filenameMatchers {
+		detector := ac.detectorsByKey[key]
+		fm, ok := detector.(detectors.FilenameMatcher)
+		if !ok {
+			continue
+		}
+		if !filedump.MatchFilename(filePath, fm.FilenamePatterns()) {
+			continue
+		}
+		dm := &DetectorMatch{
+			Key:        key,
+			Detector:   detector,
+			matchSpans: []matchSpan{{startOffset: 0, endOffset: int64(len(chunkData))}},
+		}
+		dm.extractMatches(chunkData)
+		matches = append(matches, dm)
+	}
+	return matches
+}
+
+
+func buildPrefilter(keywords []string) ahocorasick.Trie {
+	if len(keywords) == 0 {
+		return *ahocorasick.NewTrieBuilder().AddStrings([]string{"\x00"}).Build()
+	}
+	return *ahocorasick.NewTrieBuilder().AddStrings(keywords).Build()
 }

@@ -83,6 +83,17 @@ type EndpointCustomizer interface {
 	UseFoundEndpoints(bool)
 }
 
+// FilenameMatcher is an optional interface that a detector can implement to be
+// invoked based on a chunk's source file path (in addition to, or instead of,
+// keyword prefiltering). This is used for whole-file dumps of sensitive files
+// such as .env, .kube/config, .npmrc, etc.
+type FilenameMatcher interface {
+	// FilenamePatterns returns path/base globs that should trigger this detector.
+	// Patterns are matched against the full slash-normalized path and against
+	// filepath.Base(path). Examples: ".env", ".env.*", ".kube/config", "*.tfstate".
+	FilenamePatterns() []string
+}
+
 type CloudProvider interface {
 	CloudEndpoint() string
 }

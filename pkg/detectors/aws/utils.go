@@ -90,7 +90,6 @@ func CleanResults(results []detectors.Result) []detectors.Result {
 	if len(results) == 0 {
 		return results
 	}
-
 	// For every ID, we want at most one result, preferably verified.
 	idResults := map[string]detectors.Result{}
 	for _, result := range results {

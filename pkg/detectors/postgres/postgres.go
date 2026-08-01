@@ -55,6 +55,38 @@ var (
 type Scanner struct {
 	detectors.DefaultMultiPartCredentialProvider
 	detectLoopback bool // Automated tests run against localhost, but we want to ignore those results in the wild
+	ignorePatterns []*regexp.Regexp
+}
+
+type uriMatch struct {
+	params map[string]string
+	rawURI string
+}
+
+func New(opts ...func(*Scanner)) *Scanner {
+	scanner := &Scanner{
+		ignorePatterns: []*regexp.Regexp{},
+	}
+	for _, opt := range opts {
+		opt(scanner)
+	}
+
+	return scanner
+}
+
+func WithIgnorePattern(ignoreStrings []string) func(*Scanner) {
+	return func(s *Scanner) {
+		var ignorePatterns []*regexp.Regexp
+		for _, ignoreString := range ignoreStrings {
+			ignorePattern, err := regexp.Compile(ignoreString)
+			if err != nil {
+				panic(fmt.Sprintf("%s is not a valid regex, error received: %v", ignoreString, err))
+			}
+			ignorePatterns = append(ignorePatterns, ignorePattern)
+		}
+
+		s.ignorePatterns = ignorePatterns
+	}
 }
 
 var _ detectors.Detector = (*Scanner)(nil)
@@ -66,12 +98,13 @@ func (s Scanner) Keywords() []string {
 
 func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) ([]detectors.Result, error) {
 	var results []detectors.Result
-	candidateParamSets := findUriMatches(data)
+	candidateURIs := findUriMatches(data, s.ignorePatterns)
 
-	for _, params := range candidateParamSets {
+	for _, candidateURI := range candidateURIs {
 		if common.IsDone(ctx) {
 			break
 		}
+		params := candidateURI.params
 		user, ok := params[pgUser]
 		if !ok {
 			continue
@@ -112,7 +145,13 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) ([]dete
 			DetectorType: detectorspb.DetectorType_Postgres,
 			Raw:          raw,
 			RawV2:        raw,
+			AnalysisInfo:  map[string]string{"connection_string": string(raw)},
 		}
+		// Set the un-normalized raw match as the primary secret value.
+		// This ensures that the engine's line-offset and ignore-tag matching logic
+		// (which searches the source document for the exact string) can locate the match,
+		// even though Raw/RawV2 are stored in a normalized form.
+		result.SetPrimarySecretValue(candidateURI.rawURI)
 
 		// We don't need to normalize the (deprecated) requiressl option into the (up-to-date) sslmode option - pq can
 		// do it for us - but we will do it anyway here so that when we later capture sslmode into ExtraData we will
@@ -137,9 +176,6 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) ([]dete
 			isVerified, verificationErr := verifyPostgres(params)
 			result.Verified = isVerified
 			result.SetVerificationError(verificationErr, password)
-			result.AnalysisInfo = map[string]string{
-				"connection_string": string(raw),
-			}
 		}
 
 		// We gather SSL information into ExtraData in case it's useful for later reporting.
@@ -149,6 +185,19 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) ([]dete
 		}
 		result.ExtraData = map[string]string{
 			pgSslmode: sslmode,
+		}
+		if host != "" {
+			if port != "" {
+				result.ExtraData["host"] = host + ":" + port
+			} else {
+				result.ExtraData["host"] = host
+			}
+		}
+		if user != "" {
+			result.ExtraData["username"] = user
+		}
+		if dbname := params[pgDbname]; dbname != "" {
+			result.ExtraData["database"] = dbname
 		}
 
 		results = append(results, result)
@@ -161,9 +210,12 @@ func (s Scanner) IsFalsePositive(_ detectors.Result) (bool, string) {
 	return false, ""
 }
 
-func findUriMatches(data []byte) []map[string]string {
-	var matches []map[string]string
+func findUriMatches(data []byte, ignorePatterns []*regexp.Regexp) []uriMatch {
+	var matches []uriMatch
 	for _, uri := range uriPattern.FindAll(data, -1) {
+		if shouldIgnore(uri, ignorePatterns) {
+			continue
+		}
 		// Capture the database type (e.g., "postgres" or "postgresql")
 		dbTypeMatch := uriPattern.FindSubmatch(uri)
 		if len(dbTypeMatch) < 2 {
@@ -183,9 +235,21 @@ func findUriMatches(data []byte) []map[string]string {
 		}
 
 		params[pgDbType] = dbType
-		matches = append(matches, params)
+		matches = append(matches, uriMatch{
+			params: params,
+			rawURI: string(uri),
+		})
 	}
 	return matches
+}
+
+func shouldIgnore(uri []byte, ignorePatterns []*regexp.Regexp) bool {
+	for _, ignore := range ignorePatterns {
+		if ignore.Match(uri) {
+			return true
+		}
+	}
+	return false
 }
 
 // getDeadlineInSeconds gets the deadline from the context in seconds. If there
@@ -241,7 +305,7 @@ func verifyPostgres(params map[string]string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	err = db.Ping()
 	switch {

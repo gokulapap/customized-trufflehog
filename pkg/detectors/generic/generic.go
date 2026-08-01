@@ -93,6 +93,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 		s := detectors.Result{
 			DetectorType: detectorspb.DetectorType_Generic,
 			Raw:          []byte(token),
+			AnalysisInfo:  map[string]string{"key": token},
 		}
 
 		results = append(results, s)

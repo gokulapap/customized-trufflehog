@@ -72,7 +72,11 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 				s1 := detectors.Result{
 					DetectorType: detectorspb.DetectorType_PusherChannelKey,
 					Raw:          []byte(app),
-					RawV2:        []byte(app + key),
+					AnalysisInfo: map[string]string{
+						"app": app,
+						"key": key,
+					},
+					RawV2: []byte(app + key),
 				}
 
 				if verify {

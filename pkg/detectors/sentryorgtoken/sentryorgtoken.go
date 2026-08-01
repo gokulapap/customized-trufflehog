@@ -54,6 +54,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 		s1 := detectors.Result{
 			DetectorType: detectorspb.DetectorType_SentryOrgToken,
 			Raw:          []byte(orgToken),
+			AnalysisInfo:  map[string]string{"key": orgToken},
 		}
 
 		if verify {

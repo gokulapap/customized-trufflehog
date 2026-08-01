@@ -212,7 +212,7 @@ func findMatchingCertificateKID(ctx context.Context, certsURL, privateKeyPEM str
 		}
 
 		// Compare RSA public keys
-		if publicKey.PublicKey.N.Cmp(certPublicKey.N) == 0 && publicKey.PublicKey.E == certPublicKey.E {
+		if publicKey.N.Cmp(certPublicKey.N) == 0 && publicKey.E == certPublicKey.E {
 			return kid, nil
 		}
 	}
@@ -229,11 +229,11 @@ func fetchServiceAccountCerts(ctx context.Context, certsURL string) (map[string]
 	}
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := detectors.DetectorHttpClientWithNoLocalAddresses.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, nil
@@ -248,7 +248,7 @@ func fetchServiceAccountCerts(ctx context.Context, certsURL string) (map[string]
 }
 
 // parsePrivateKey parses a PEM-encoded private key
-func parsePrivateKey(privateKeyPEM string) (interface{}, error) {
+func parsePrivateKey(privateKeyPEM string) (any, error) {
 	block, _ := pem.Decode([]byte(privateKeyPEM))
 	if block == nil {
 		return nil, nil

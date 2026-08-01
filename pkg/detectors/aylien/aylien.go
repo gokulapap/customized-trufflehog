@@ -51,7 +51,11 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			s1 := detectors.Result{
 				DetectorType: detectorspb.DetectorType_Aylien,
 				Raw:          []byte(resMatch),
-				RawV2:        []byte(resMatch + resIdMatch),
+				AnalysisInfo: map[string]string{
+					"key": resMatch,
+					"id":  resIdMatch,
+				},
+				RawV2: []byte(resMatch + resIdMatch),
 			}
 			if verify {
 				isVerified, err := verifyMatch(ctx, client, resIdMatch, resMatch)

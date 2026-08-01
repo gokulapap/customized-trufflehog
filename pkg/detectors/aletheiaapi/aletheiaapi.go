@@ -48,6 +48,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 		s1 := detectors.Result{
 			DetectorType: detectorspb.DetectorType_AletheiaApi,
 			Raw:          []byte(key),
+			AnalysisInfo:  map[string]string{"key": key},
 		}
 
 		if verify {

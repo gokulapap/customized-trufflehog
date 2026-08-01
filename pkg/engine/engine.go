@@ -23,6 +23,7 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/context"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/decoders"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
+	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors/filedump"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/engine/ahocorasick"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/engine/defaults"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/giturl"
@@ -807,6 +808,12 @@ func (e *Engine) scannerWorker(ctx context.Context) {
 			}
 
 			matchingDetectors := e.AhoCorasickCore.FindDetectorMatches(decoded.Chunk.Data)
+			if filePath := extractFilePath(decoded.Chunk.SourceMetadata); filePath != "" {
+				matchingDetectors = mergeDetectorMatches(
+					matchingDetectors,
+					e.AhoCorasickCore.FindFilenameMatches(filePath, decoded.Chunk.Data),
+				)
+			}
 			if len(matchingDetectors) > 1 && !e.verificationOverlap {
 				wgVerificationOverlap.Add(1)
 				e.verificationOverlapChunksChan <- verificationOverlapChunk{
@@ -942,13 +949,18 @@ func (e *Engine) verificationOverlapWorker(ctx context.Context) {
 	chunkSecrets := make(map[chunkSecretKey]struct{}, avgSecretsPerDetector)
 
 	for chunk := range e.verificationOverlapChunksChan {
+		filePath := extractFilePath(chunk.chunk.SourceMetadata)
+		chunkCtx := ctx
+		if filePath != "" {
+			chunkCtx = context.WithValue(ctx, filedump.FilePathContextKey{}, filePath)
+		}
 		for _, detector := range chunk.detectors {
 			isFalsePositive := detectors.GetFalsePositiveCheck(detector.Detector)
 
 			// DO NOT VERIFY at this stage of the pipeline.
 			matchedBytes := detector.Matches()
 			for _, match := range matchedBytes {
-				ctx, cancel := context.WithTimeout(ctx, time.Second*2)
+				ctx, cancel := context.WithTimeout(chunkCtx, time.Second*2)
 				results, err := detector.FromData(ctx, false, match)
 				cancel()
 				if err != nil {
@@ -1066,6 +1078,10 @@ func (e *Engine) detectChunk(ctx context.Context, data detectableChunk) {
 		"chunk_source_name", data.chunk.SourceName,
 		"chunk_source_id", data.chunk.SourceID,
 		"chunk_source_metadata", data.chunk.SourceMetadata.String())
+
+	if filePath := extractFilePath(data.chunk.SourceMetadata); filePath != "" {
+		ctx = context.WithValue(ctx, filedump.FilePathContextKey{}, filePath)
+	}
 
 	ctx.Logger().V(5).Info("Starting to detect chunk")
 
@@ -1386,4 +1402,72 @@ func UpdateLink(ctx context.Context, metadata *source_metadatapb.MetaData, link 
 		return fmt.Errorf("unsupported metadata type")
 	}
 	return nil
+}
+
+// extractFilePath returns the source file path from chunk metadata when available.
+func extractFilePath(md *source_metadatapb.MetaData) string {
+	if md == nil {
+		return ""
+	}
+	switch data := md.GetData().(type) {
+	case *source_metadatapb.MetaData_Filesystem:
+		return data.Filesystem.GetFile()
+	case *source_metadatapb.MetaData_Docker:
+		return data.Docker.GetFile()
+	case *source_metadatapb.MetaData_Git:
+		return data.Git.GetFile()
+	case *source_metadatapb.MetaData_Github:
+		return data.Github.GetFile()
+	case *source_metadatapb.MetaData_Gitlab:
+		return data.Gitlab.GetFile()
+	case *source_metadatapb.MetaData_Bitbucket:
+		return data.Bitbucket.GetFile()
+	case *source_metadatapb.MetaData_S3:
+		return data.S3.GetFile()
+	case *source_metadatapb.MetaData_Gcs:
+		return data.Gcs.GetFilename()
+	case *source_metadatapb.MetaData_Ecr:
+		return data.Ecr.GetFile()
+	case *source_metadatapb.MetaData_Huggingface:
+		return data.Huggingface.GetFile()
+	case *source_metadatapb.MetaData_AzureRepos:
+		return data.AzureRepos.GetFile()
+	case *source_metadatapb.MetaData_GoogleDrive:
+		return data.GoogleDrive.GetFile()
+	case *source_metadatapb.MetaData_Gerrit:
+		return data.Gerrit.GetFile()
+	case *source_metadatapb.MetaData_Npm:
+		return data.Npm.GetFile()
+	case *source_metadatapb.MetaData_Pypi:
+		return data.Pypi.GetFile()
+	case *source_metadatapb.MetaData_Confluence:
+		return data.Confluence.GetFile()
+	case *source_metadatapb.MetaData_Slack:
+		return data.Slack.GetFile()
+	case *source_metadatapb.MetaData_Teams:
+		return data.Teams.GetFile()
+	case *source_metadatapb.MetaData_Test:
+		return data.Test.GetFile()
+	default:
+		return ""
+	}
+}
+
+// mergeDetectorMatches appends extra matches that are not already present by DetectorKey.
+func mergeDetectorMatches(base, extra []*ahocorasick.DetectorMatch) []*ahocorasick.DetectorMatch {
+	if len(extra) == 0 {
+		return base
+	}
+	seen := make(map[ahocorasick.DetectorKey]struct{}, len(base)+len(extra))
+	for _, m := range base {
+		seen[m.Key] = struct{}{}
+	}
+	for _, m := range extra {
+		if _, ok := seen[m.Key]; ok {
+			continue
+		}
+		base = append(base, m)
+		seen[m.Key] = struct{}{}
+	}
+	return base
 }

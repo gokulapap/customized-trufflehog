@@ -50,6 +50,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 		s1 := detectors.Result{
 			DetectorType: detectorspb.DetectorType_HubSpotApiKey,
 			Raw:          []byte(token),
+			AnalysisInfo:  map[string]string{"key": token},
 			Redacted:     token[8:] + "...",
 		}
 

@@ -53,6 +53,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 		s1 := detectors.Result{
 			DetectorType: detectorspb.DetectorType_LokaliseToken,
 			Raw:          []byte(resMatch),
+			AnalysisInfo:  map[string]string{"key": resMatch},
 			ExtraData:    make(map[string]string),
 		}
 

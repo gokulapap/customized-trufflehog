@@ -1049,6 +1049,50 @@ enum DetectorType {
   PhraseAccessToken = 1037;
   Photoroom = 1038;
   JWT = 1039;
+
+  // --- Synced from upstream trufflesecurity/trufflehog (detectors missing from this fork) ---
+  ArtifactoryReferenceToken = 1040;
+  ConfluenceDataCenter = 1041;
+  BitbucketDataCenter = 1042;
+  JiraDataCenterPAT = 1043;
+  BrainTrustApiKey = 1044;
+  Cloudinary = 1045;
+  DuffelToken = 1046;
+  Duo = 1047;
+  GitLabOauth2 = 1048;
+  GoogleGeminiAPIKey = 1049;
+  HashiCorpVaultBatchToken = 1050;
+  HashiCorpVaultToken = 1051;
+  NewRelicBrowserKey = 1052;
+  NewRelicInsightsInsertKey = 1053;
+  NewRelicInsightsQueryKey = 1054;
+  NewRelicLicenseKey = 1055;
+  NewRelicMobileAppToken = 1056;
+  NewRelicUserKey = 1057;
+  OctopusDeploy = 1058;
+  OpenAIAdmin = 1059;
+  OpenRouter = 1060;
+  PgAnalyzeReadKey = 1061;
+  Pinecone = 1062;
+  RedHatPyxis = 1063;
+  Shippo = 1064;
+  ShopifyOAuth = 1065;
+  SpectralOps = 1066;
+  DatadogApikey = 1067;
+  AWSAppSync = 1068;
+
+  // --- Custom filename-based full-content detectors (this fork's customizations) ---
+  EnvFile = 1069;
+  KubeConfigFile = 1070;
+  VaultTokenFile = 1071;
+  NpmrcFile = 1072;
+  NetrcFile = 1073;
+  PgPassFile = 1074;
+  HtpasswdFile = 1075;
+  GitCredentialsFile = 1076;
+  TerraformStateFile = 1077;
+  WpConfigFile = 1078;
+  ShellHistoryFile = 1079;
 }
 
 message Result {

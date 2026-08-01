@@ -54,6 +54,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 		s1 := detectors.Result{
 			DetectorType: detectorspb.DetectorType_StoryblokAccessToken,
 			Raw:          []byte(accessToken),
+			AnalysisInfo:  map[string]string{"key": accessToken},
 		}
 
 		if verify {

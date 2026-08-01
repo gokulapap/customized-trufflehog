@@ -79,6 +79,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			result := detectors.Result{
 				DetectorType: detectorspb.DetectorType_GoDaddy,
 				Raw:          []byte(key),
+				AnalysisInfo:  map[string]string{"key": key},
 				ExtraData:    make(map[string]string),
 			}
 

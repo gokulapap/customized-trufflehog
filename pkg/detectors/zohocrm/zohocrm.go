@@ -50,6 +50,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 		result := detectors.Result{
 			DetectorType: detectorspb.DetectorType_ZohoCRM,
 			Raw:          []byte(match),
+			AnalysisInfo:  map[string]string{"key": match},
 		}
 
 		if verify {

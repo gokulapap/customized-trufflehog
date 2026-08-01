@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 
 	regexp "github.com/wasilibs/go-re2"
@@ -54,17 +55,24 @@ func (s Scanner) Keywords() []string {
 func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (results []detectors.Result, err error) {
 	dataStr := string(data)
 
-	apiKeyMatches := apiKeyPat.FindAllString(dataStr, -1)
-	secretMatches := secretPat.FindAllString(dataStr, -1)
+	uniqueAPIKeys := make(map[string]struct{})
+	for _, k := range apiKeyPat.FindAllString(dataStr, -1) {
+		uniqueAPIKeys[k] = struct{}{}
+	}
+	uniqueSecrets := make(map[string]struct{})
+	for _, s := range secretPat.FindAllString(dataStr, -1) {
+		uniqueSecrets[s] = struct{}{}
+	}
 
-	for _, apiKey := range apiKeyMatches {
-		for _, secret := range secretMatches {
+	for apiKey := range uniqueAPIKeys {
+		for secret := range uniqueSecrets {
 			s1 := detectors.Result{
 				DetectorType: detectorspb.DetectorType_Twilio,
 				Raw:          []byte(apiKey),
 				RawV2:        []byte(apiKey + ":" + secret),
 				Redacted:     secret[:5] + "...",
 				ExtraData:    make(map[string]string),
+				AnalysisInfo:  map[string]string{"key": apiKey, "sid": secret},
 			}
 
 			if verify {
@@ -72,13 +80,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 				s1.Verified = isVerified
 				s1.SetVerificationError(verificationErr)
 
-				for key, value := range extraData {
-					s1.ExtraData[key] = value
-				}
-
-				if s1.Verified {
-					s1.AnalysisInfo = map[string]string{"key": apiKey, "sid": secret}
-				}
+				maps.Copy(s1.ExtraData, extraData)
 			}
 
 			results = append(results, s1)

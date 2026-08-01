@@ -55,6 +55,10 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 				DetectorType: detectorspb.DetectorType_AdobeIO,
 				Raw:          []byte(key),
 				RawV2:        []byte(key + id),
+				AnalysisInfo: map[string]string{
+					"key": key,
+					"id":  id,
+				},
 			}
 
 			if verify {

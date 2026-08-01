@@ -89,6 +89,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 					Raw:          []byte(tokenName),
 					RawV2:        []byte(fmt.Sprintf("%s:%s:%s", tokenName, tokenSecret, endpoint)),
 					ExtraData:    make(map[string]string),
+					AnalysisInfo:  map[string]string{"token_name": tokenName, "pat_secret": tokenSecret, "endpoint": endpoint},
 				}
 
 				if verify {

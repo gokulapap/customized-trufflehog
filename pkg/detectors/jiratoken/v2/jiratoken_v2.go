@@ -83,6 +83,11 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 						"rotation_guide": "https://howtorotate.com/docs/tutorials/atlassian/",
 						"version":        fmt.Sprintf("%d", s.Version()),
 					},
+					AnalysisInfo: map[string]string{
+						"token":  token,
+						"domain": domain,
+						"email":  email,
+					},
 				}
 
 				if verify {

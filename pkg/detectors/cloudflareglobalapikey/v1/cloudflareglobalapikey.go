@@ -2,13 +2,13 @@ package cloudflareglobalapikey
 
 import (
 	"context"
-	"net/http"
 	"strings"
 
 	regexp "github.com/wasilibs/go-re2"
 
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
+	cfglobalapikey "github.com/trufflesecurity/trufflehog/v3/pkg/detectors/cloudflareglobalapikey"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
 )
 
@@ -16,13 +16,17 @@ type Scanner struct {
 	detectors.DefaultMultiPartCredentialProvider
 }
 
-// Ensure the Scanner satisfies the interface at compile time.
+// Ensure the Scanner satisfies the interfaces at compile time.
 var _ detectors.Detector = (*Scanner)(nil)
+var _ detectors.Versioner = (*Scanner)(nil)
+
+func (Scanner) Version() int { return 1 }
 
 var (
 	client = common.SaneHttpClient()
 
-	apiKeyPat = regexp.MustCompile(detectors.PrefixRegex([]string{"cloudflare"}) + `\b([A-Za-z0-9_-]{37})\b`)
+	// Pre-2026 format: lowercase hex, 37-45 chars, requires "cloudflare" keyword nearby.
+	apiKeyPat = regexp.MustCompile(detectors.PrefixRegex([]string{"cloudflare"}) + `\b([a-f0-9]{37,45})\b`)
 
 	emailPat = regexp.MustCompile(common.EmailPattern)
 )
@@ -52,25 +56,17 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 				DetectorType: detectorspb.DetectorType_CloudflareGlobalApiKey,
 				Redacted:     emailMatch,
 				Raw:          []byte(apiKeyRes),
-				RawV2:        []byte(apiKeyRes + emailMatch),
+				AnalysisInfo: map[string]string{
+					"key":   apiKeyRes,
+					"email": emailMatch,
+				},
+				RawV2: []byte(apiKeyRes + emailMatch),
 			}
 
 			if verify {
-				req, err := http.NewRequestWithContext(ctx, "GET", "https://api.cloudflare.com/client/v4/user", nil)
-				if err != nil {
-					continue
-				}
-				req.Header.Add("X-Auth-Email", emailMatch)
-				req.Header.Add("X-Auth-Key", apiKeyRes)
-				req.Header.Add("Content-Type", "application/json")
-
-				res, err := client.Do(req)
-				if err == nil {
-					defer res.Body.Close()
-					if res.StatusCode >= 200 && res.StatusCode < 300 {
-						s1.Verified = true
-					}
-				}
+				isVerified, verificationErr := cfglobalapikey.VerifyGlobalAPIKey(ctx, client, apiKeyRes, emailMatch)
+				s1.Verified = isVerified
+				s1.SetVerificationError(verificationErr, apiKeyRes)
 			}
 
 			results = append(results, s1)

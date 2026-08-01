@@ -56,6 +56,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 				DetectorType: detectorspb.DetectorType_AirbrakeProjectKey,
 				Raw:          []byte(key),
 				RawV2:        []byte(key + id),
+				AnalysisInfo:  map[string]string{"key": key, "id": id},
 			}
 			s1.ExtraData = map[string]string{
 				"rotation_guide": "https://howtorotate.com/docs/tutorials/airbrake/",

@@ -70,6 +70,10 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 				DetectorType: detectorspb.DetectorType_AnypointOAuth2,
 				Raw:          []byte(secret),
 				RawV2:        []byte(fmt.Sprintf("%s:%s", id, secret)),
+				AnalysisInfo: map[string]string{
+					"client_id":     id,
+					"client_secret": secret,
+				},
 			}
 
 			if verify {
@@ -77,7 +81,6 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 				isVerified, verificationErr := verifyMatch(ctx, client, id, secret)
 				s1.Verified = isVerified
 				s1.SetVerificationError(verificationErr)
-
 			}
 
 			results = append(results, s1)

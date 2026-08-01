@@ -67,20 +67,20 @@ func (p *PlainPrinter) Print(_ context.Context, r *detectors.ResultWithMetadata)
 	// Print RawV2 if it exists and differs from Raw (contains additional secret info)
 	rawV2 := strings.TrimSpace(string(r.Result.RawV2))
 	if rawV2 != "" && rawV2 != out.Raw {
-		// Try to pretty-print if it's JSON (e.g., GCP service account)
+		full := rawV2
+		// Pretty-print JSON when possible (e.g., GCP service account).
 		if strings.HasPrefix(rawV2, "{") {
 			var jsonObj map[string]interface{}
 			if err := json.Unmarshal([]byte(rawV2), &jsonObj); err == nil {
 				if prettyJSON, err := json.MarshalIndent(jsonObj, "", "  "); err == nil {
-					printer.Printf("Raw result (full):\n%s\n", whitePrinter.Sprint(string(prettyJSON)))
-				} else {
-					printer.Printf("Raw result (full): %s\n", whitePrinter.Sprint(rawV2))
+					full = string(prettyJSON)
 				}
-			} else {
-				printer.Printf("Raw result (full): %s\n", whitePrinter.Sprint(rawV2))
 			}
+		}
+		if strings.Contains(full, "\n") {
+			printer.Printf("Raw result (full):\n%s\n", whitePrinter.Sprint(full))
 		} else {
-			printer.Printf("Raw result (full): %s\n", whitePrinter.Sprint(rawV2))
+			printer.Printf("Raw result (full): %s\n", whitePrinter.Sprint(full))
 		}
 	}
 

@@ -49,7 +49,11 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			s1 := detectors.Result{
 				DetectorType: detectorspb.DetectorType_Geocodio,
 				Raw:          []byte(resMatch),
-				RawV2:        []byte(resMatch + resSearchMatch),
+				AnalysisInfo: map[string]string{
+					"key":           resMatch,
+					"search_engine": resSearchMatch,
+				},
+				RawV2: []byte(resMatch + resSearchMatch),
 			}
 
 			if verify {
@@ -59,7 +63,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 				}
 				res, err := client.Do(req)
 				if err == nil {
-					defer res.Body.Close()
+					defer func() { _ = res.Body.Close() }()
 					if res.StatusCode >= 200 && res.StatusCode < 300 {
 						s1.Verified = true
 					}

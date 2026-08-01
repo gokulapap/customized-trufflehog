@@ -29,7 +29,7 @@ var (
 	defaultClient = detectors.DetectorHttpClientWithNoLocalAddresses
 
 	// Make sure that your group is surrounded in boundary characters such as below to reduce false positives.
-	keyPat = regexp.MustCompile(`\b([a-zA-Z0-9]{64,73})\b`)
+	keyPat = regexp.MustCompile(`\b(AKCp[a-zA-Z0-9]{69})\b`)
 	URLPat = regexp.MustCompile(`\b([A-Za-z0-9][A-Za-z0-9\-]{0,61}[A-Za-z0-9]\.jfrog\.io)`)
 
 	invalidHosts = simple.NewCache[struct{}]()
@@ -42,7 +42,7 @@ func (Scanner) CloudEndpoint() string { return "" }
 // Keywords are used for efficiently pre-filtering chunks.
 // Use identifiers in the secret preferably, or the provider name.
 func (s Scanner) Keywords() []string {
-	return []string{"artifactory", "jfrog.io"}
+	return []string{"artifactory", "jfrog.io", "AKCp"}
 }
 
 func (s Scanner) getClient() *http.Client {
@@ -86,6 +86,10 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 				DetectorType: detectorspb.DetectorType_ArtifactoryAccessToken,
 				Raw:          []byte(token),
 				RawV2:        []byte(token + url),
+				AnalysisInfo: map[string]string{
+					"domain": url,
+					"token":  token,
+				},
 			}
 
 			if verify {
@@ -98,13 +102,6 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 					}
 
 					s1.SetVerificationError(verificationErr, token)
-
-					if isVerified {
-						s1.AnalysisInfo = map[string]string{
-							"domain": url,
-							"token":  token,
-						}
-					}
 				}
 			}
 

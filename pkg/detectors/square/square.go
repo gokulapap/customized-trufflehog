@@ -21,7 +21,7 @@ var _ detectors.Detector = (*Scanner)(nil)
 
 var (
 	// more context to be added if this is too generic
-	secretPat = regexp.MustCompile(detectors.PrefixRegex([]string{"square"}) + `(EAAA[a-zA-Z0-9\-\+\=]{60})`)
+	secretPat = regexp.MustCompile(detectors.PrefixRegex([]string{"square"}) + `(EAAA[a-zA-Z0-9\-_+=]{60})`)
 )
 
 // Keywords are used for efficiently pre-filtering chunks.
@@ -46,6 +46,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 		result := detectors.Result{
 			DetectorType: detectorspb.DetectorType_Square,
 			Raw:          []byte(resMatch),
+			AnalysisInfo:  map[string]string{"key": resMatch},
 		}
 		result.ExtraData = map[string]string{
 			"rotation_guide": "https://howtorotate.com/docs/tutorials/square/",
@@ -69,7 +70,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			// req.Header.Add("Square-Version", "2020-08-12")
 			res, err := client.Do(req)
 			if err == nil {
-				res.Body.Close() // The request body is unused.
+				_ = res.Body.Close() // The request body is unused.
 
 				// 200 means good key and has `merchants` scope - default allowed by square
 				// 401 is bad key
@@ -77,7 +78,6 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 					result.Verified = true
 				}
 			}
-			result.AnalysisInfo = map[string]string{"key": resMatch}
 		}
 
 		results = append(results, result)

@@ -53,7 +53,11 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			s1 := detectors.Result{
 				DetectorType: detectorspb.DetectorType_SatismeterProjectkey,
 				Raw:          []byte(projectID),
-				RawV2:        []byte(projectID + token),
+				AnalysisInfo: map[string]string{
+					"project_id": projectID,
+					"token":      token,
+				},
+				RawV2: []byte(projectID + token),
 			}
 
 			if verify {

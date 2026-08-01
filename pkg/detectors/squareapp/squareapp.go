@@ -75,6 +75,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			result := detectors.Result{
 				DetectorType: detectorspb.DetectorType_SquareApp,
 				Raw:          []byte(id),
+				AnalysisInfo:  map[string]string{"key": id},
 				Redacted:     id,
 				ExtraData:    map[string]string{},
 			}

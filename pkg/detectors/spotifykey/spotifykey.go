@@ -50,6 +50,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			s1 := detectors.Result{
 				DetectorType: detectorspb.DetectorType_SpotifyKey,
 				Raw:          []byte(resMatch),
+				AnalysisInfo:  map[string]string{"key": resMatch},
 			}
 
 			if verify {

@@ -59,7 +59,11 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 					DetectorType: detectorspb.DetectorType_Auth0oauth,
 					Redacted:     clientIdRes,
 					Raw:          []byte(clientSecretRes),
-					RawV2:        []byte(clientIdRes + clientSecretRes),
+					AnalysisInfo: map[string]string{
+						"client_id":     clientIdRes,
+						"client_secret": clientSecretRes,
+					},
+					RawV2: []byte(clientIdRes + clientSecretRes),
 				}
 
 				if verify {

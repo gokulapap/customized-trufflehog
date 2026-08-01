@@ -25,10 +25,20 @@ type Scanner struct {
 var _ detectors.Detector = (*Scanner)(nil)
 
 var (
-	defaultClient = common.SaneHttpClient()
+	// The OpenAI API can be slow to respond under load, so use a longer
+	// per-attempt timeout than the default 5s and retry transient failures
+	// (timeouts, connection errors, 429/5xx) so a single slow response does
+	// not record an indeterminate verification result.
+	defaultClient = common.RetryableHTTPClient(
+		common.WithTimeout(10*time.Second),
+		common.WithMaxRetries(2),
+	)
 
 	// The magic string T3BlbkFJ is the base64-encoded string: OpenAI
-	keyPat = regexp.MustCompile(`\b(sk-[[:alnum:]_-]+T3BlbkFJ[[:alnum:]_-]+)\b`)
+	// Matches: legacy keys (sk-{alnum}T3BlbkFJ...), project keys (sk-proj-...),
+	//          service account keys (sk-svcacct-... or sk-service-...)
+	// Does NOT match: admin keys (sk-admin-...)
+	keyPat = regexp.MustCompile(`\b(sk-(?:(?:proj|svcacct|service)-[A-Za-z0-9_-]+|[a-zA-Z0-9]+)T3BlbkFJ[A-Za-z0-9_-]+)\b`)
 )
 
 // Keywords are used for efficiently pre-filtering chunks.
@@ -51,6 +61,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			DetectorType: detectorspb.DetectorType_OpenAI,
 			Redacted:     token[:3] + "..." + token[min(len(token)-1, 47):],
 			Raw:          []byte(token),
+			AnalysisInfo:  map[string]string{"key": token},
 		}
 
 		if verify {
@@ -63,7 +74,6 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			s1.Verified = verified
 			s1.ExtraData = extraData
 			s1.SetVerificationError(verificationErr)
-			s1.AnalysisInfo = map[string]string{"key": token}
 		}
 
 		results = append(results, s1)

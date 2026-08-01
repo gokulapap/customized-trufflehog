@@ -50,6 +50,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			ExtraData: map[string]string{
 				"rotation_guide": "https://howtorotate.com/docs/tutorials/airbrake/",
 			},
+			AnalysisInfo: map[string]string{"key": key},
 		}
 
 		if verify {

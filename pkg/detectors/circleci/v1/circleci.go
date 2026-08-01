@@ -66,6 +66,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 		result := detectors.Result{
 			DetectorType: detectorspb.DetectorType_Circle,
 			Raw:          []byte(token),
+			AnalysisInfo:  map[string]string{"key": token},
 			ExtraData: map[string]string{
 				"Version": strconv.Itoa(s.Version()),
 			},
