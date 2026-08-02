@@ -1,34 +1,62 @@
-# Path substrings / globs matched against slash-normalized file paths.
-# If a path contains or matches any entry, emails from that file are skipped.
-# Supports * and ? globs via gobwas/glob. One pattern per line.
+# Path globs matched against slash-normalized absolute in-image / filesystem paths.
+# Supports * and ? via gobwas/glob. One pattern per line.
+#
+# IMPORTANT: Prefer root-anchored patterns (/usr/**) for OS trees.
+# Unanchored **/lib/** also matches /app/lib and will drop real app email.
+#
+# Dependency / lock / minified trees stay unanchored — junk anywhere.
+
+# --- Root-anchored OS / package manager trees (Docker-safe) ---
+/usr/**
+/lib/**
+/lib64/**
+/lib32/**
+/bin/**
+/sbin/**
+/boot/**
+/proc/**
+/sys/**
+/dev/**
+/run/**
+/tmp/**
+/var/lib/dpkg/**
+/var/cache/**
+/var/log/**
+/var/tmp/**
+/etc/apt/**
+/etc/ssl/certs/**
+/etc/alternatives/**
+
+# --- Dependency trees (junk anywhere, including under WORKDIR) ---
 **/node_modules/**
 **/vendor/**
 **/.git/**
 **/site-packages/**
+**/dist-packages/**
 **/.venv/**
 **/venv/**
 **/__pycache__/**
 **/.tox/**
 **/.pnpm/**
 **/.yarn/**
-**/dist/**
-**/build/**
-**/target/**
-**/.next/**
-**/.nuxt/**
-**/coverage/**
-**/Pods/**
-**/Carthage/**
-**/.gradle/**
-**/.m2/**
 **/bower_components/**
 **/jspm_packages/**
 **/.bundle/**
 **/vendor/bundle/**
-**/composer.lock
+**/Pods/**
+**/Carthage/**
+**/.gradle/**
+**/.m2/**
+**/gems/**
+**/perl/**
+**/python*/lib/**
+**/Lib/site-packages/**
+
+# Lockfiles / minified (low signal for contacts)
 **/package-lock.json
 **/yarn.lock
 **/pnpm-lock.yaml
+**/composer.lock
 **/Pipfile.lock
 **/poetry.lock
 **/Cargo.lock
@@ -37,6 +65,8 @@
 **/*.min.js
 **/*.min.css
 **/*.map
+
+# License / changelog noise (often copy-pasted authors from upstream)
 **/LICENSE
 **/LICENSE.*
 **/LICENCE
@@ -47,41 +77,3 @@
 **/HISTORY.md
 **/THIRD_PARTY*
 **/ATTRIBUTION*
-**/node_modules
-**/python*/lib/**
-**/Lib/site-packages/**
-**/share/doc/**
-**/usr/share/doc/**
-**/usr/lib/**
-**/usr/share/licenses/**
-**/usr/share/**
-**/usr/include/**
-**/usr/src/**
-**/usr/bin/**
-**/usr/sbin/**
-**/lib/**
-**/lib64/**
-**/lib32/**
-**/var/lib/dpkg/**
-**/var/cache/**
-**/var/log/**
-**/etc/apt/**
-**/share/locale/**
-**/share/man/**
-**/share/info/**
-**/share/zoneinfo/**
-**/share/misc/**
-**/perl/**
-**/python*/**
-**/gems/**
-**/node/**
-**/go/pkg/**
-**/openssl/**
-**/openssh/**
-**/doc/**
-**/docs/**
-**/man/**
-**/locale/**
-**/i18n/**
-**/po/**
-**/gettext/**

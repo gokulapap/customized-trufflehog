@@ -17,12 +17,17 @@ var (
 type Mode string
 
 const (
-	// ModeFiltered keeps role usernames + clean personal emails on non-blocked domains.
+	// ModeFiltered collects candidates (trash/paths/domains stripped), then keeps
+	// only domains that have >=2 distinct emails.
 	ModeFiltered Mode = "filtered"
 	// ModeRoles keeps only local-parts listed in usernames.txt.
 	ModeRoles Mode = "roles"
-	// ModeAll keeps anything that passes trash/domain/path/structure checks.
+	// ModeAll keeps anything that passes trash/domain/path/structure checks
+	// (no domain-count gate).
 	ModeAll Mode = "all"
+	// ModeUnfiltered keeps well-formed emails except blocked spam domains.
+	// Skips path/trash/noise/count filters — for offline analysis.
+	ModeUnfiltered Mode = "unfiltered"
 )
 
 func ParseMode(s string) Mode {
@@ -31,9 +36,58 @@ func ParseMode(s string) Mode {
 		return ModeRoles
 	case string(ModeAll):
 		return ModeAll
+	case string(ModeUnfiltered):
+		return ModeUnfiltered
 	default:
 		return ModeFiltered
 	}
+}
+
+// IsNoiseLocal drops test/staging-style local-parts beyond the explicit trash list.
+func IsNoiseLocal(local string) bool {
+	local = strings.ToLower(strings.TrimSpace(local))
+	if local == "" {
+		return false
+	}
+	// Strip +tag for matching (engineering+1 stays; test+foo drops).
+	if i := strings.IndexByte(local, '+'); i > 0 {
+		local = local[:i]
+	}
+	if local == "staging" || strings.HasPrefix(local, "staging") ||
+		local == "uat" || local == "qa" || local == "sandbox" {
+		return true
+	}
+	if strings.HasPrefix(local, "test") {
+		return true
+	}
+	// transmstest, loadtest, etc.
+	if len(local) > 4 && strings.HasSuffix(local, "test") {
+		return true
+	}
+	return false
+}
+
+// IsNoiseDomain drops GCP service accounts and test/staging hostnames.
+func IsNoiseDomain(domain string) bool {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	if domain == "" {
+		return false
+	}
+	if domain == "gserviceaccount.com" || strings.HasSuffix(domain, ".gserviceaccount.com") {
+		return true
+	}
+	parts := strings.Split(domain, ".")
+	for _, p := range parts[:len(parts)-1] { // skip public TLD-ish last label
+		switch p {
+		case "test", "testing", "staging", "uat", "qa", "sandbox", "localhost":
+			return true
+		}
+	}
+	// testdozr.com, test-env.example.com
+	if len(parts) >= 2 && strings.HasPrefix(parts[0], "test") {
+		return true
+	}
+	return false
 }
 
 // IsWellFormed rejects binary garbage and protocol-ish false positives.

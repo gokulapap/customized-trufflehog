@@ -95,7 +95,7 @@ var (
 
 	// Customized fork: email finder (opt-in)
 	findEmails              = cli.Flag("find-emails", "Find unique emails and print a comma-separated list after the scan.").Bool()
-	emailMode               = cli.Flag("email-mode", "Email filter mode: filtered/roles (default: only usernames.txt on non-junk paths), all.").Default("filtered").Enum("filtered", "roles", "all")
+	emailMode               = cli.Flag("email-mode", "Email filter mode: filtered (default: domain count>=2 after path/trash/domain filters), roles, all (same pre-filters, no count), unfiltered (spam domains only, for analysis).").Default("filtered").Enum("filtered", "roles", "all", "unfiltered")
 	emailUsernamesFile      = cli.Flag("email-usernames-file", "Replace default interesting contact usernames (support, devops, …) with this newline-separated file.").String()
 	emailTrashUsernamesFile = cli.Flag("email-trash-usernames-file", "Replace default trash local-parts (noreply, test, …) with this newline-separated file.").String()
 	emailDomainsFile        = cli.Flag("email-domains-file", "Replace default blocked email domains with this newline-separated file.").String()
@@ -104,6 +104,7 @@ var (
 	emailExtraTrashFile     = cli.Flag("email-extra-trash-usernames-file", "Append extra trash local-parts to the defaults.").String()
 	emailExtraDomainsFile   = cli.Flag("email-extra-domains-file", "Append extra blocked email domains to the defaults.").String()
 	emailExtraPathsFile     = cli.Flag("email-extra-paths-file", "Append extra email path exclude globs to the defaults.").String()
+	emailAppRoots           = cli.Flag("email-app-roots", "Comma-separated trusted app path prefixes (e.g. /app,/src). For docker, WorkingDir is auto-detected and merged.").String()
 
 	gitScan                = cli.Command("git", "Find credentials in git repositories.")
 	gitScanURI             = gitScan.Arg("uri", "Git repository URL. https://, file://, or ssh:// schema expected.").Required().String()
@@ -542,6 +543,7 @@ func run(state overseer.State) {
 
 	detectorsList := append(defaults.DefaultDetectors(), conf.Detectors...)
 	var emailCollector *emailfinder.Collector
+	var emailAppRootsForLog []string
 	if *findEmails {
 		emailCfg, err := emailfinder.LoadConfig(emailfinder.Options{
 			Mode:                    emailfinder.ParseMode(*emailMode),
@@ -553,11 +555,27 @@ func run(state overseer.State) {
 			ExtraTrashUsernamesFile: *emailExtraTrashFile,
 			ExtraDomainsFile:        *emailExtraDomainsFile,
 			ExtraPathsFile:          *emailExtraPathsFile,
+			AppRoots:                emailfinder.ParseAppRoots(*emailAppRoots),
 		})
 		if err != nil {
 			logFatal(err, "failed to load email finder config")
 		}
-		emailCollector = emailfinder.NewCollector()
+		// Docker: merge image Config.WorkingDir into app roots (boost whitelist).
+		if cmd == dockerScan.FullCommand() {
+			for _, img := range *dockerScanImages {
+				wd, err := emailfinder.DetectDockerWorkingDir(img)
+				if err != nil {
+					logger.V(1).Info("email finder: could not detect docker WorkingDir", "image", img, "error", err)
+					continue
+				}
+				if wd != "" {
+					emailCfg.AddAppRoot(wd)
+					logger.Info("email finder using docker WorkingDir as app root", "workdir", wd, "image", img)
+				}
+			}
+		}
+		emailAppRootsForLog = append([]string(nil), emailCfg.AppRoots...)
+		emailCollector = emailfinder.NewCollector(emailCfg)
 		detectorsList = append(detectorsList, &emailfinderscanner.Scanner{
 			Config:    emailCfg,
 			Collector: emailCollector,
@@ -649,7 +667,12 @@ func run(state overseer.State) {
 		} else {
 			fmt.Fprintf(os.Stdout, "emails: \n")
 		}
-		logger.Info("email finder summary", "unique_emails", emailCollector.Count())
+		logger.Info("email finder summary",
+			"unique_emails", emailCollector.Count(),
+			"candidates", emailCollector.CandidateCount(),
+			"domains", emailCollector.DomainStats(),
+			"app_roots", emailAppRootsForLog,
+		)
 	}
 
 	if metrics.hasFoundResults && *fail {

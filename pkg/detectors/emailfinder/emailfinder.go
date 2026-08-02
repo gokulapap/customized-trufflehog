@@ -38,7 +38,7 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) ([]dete
 	}
 	filePath, _ := ctx.Value(filedump.FilePathContextKey{}).(string)
 	for _, email := range ef.Extract(data, filePath, s.Config) {
-		s.Collector.Add(email)
+		s.Collector.Add(email, filePath)
 	}
 	// No per-match results: emails are printed once as a CSV summary after the scan.
 	return nil, nil

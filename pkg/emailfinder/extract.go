@@ -9,13 +9,14 @@ import (
 
 var emailRe = regexp.MustCompile(common.EmailPattern)
 
-// Extract returns unique emails from data that pass Config filters.
-// filePath is optional and used for path-based exclusion.
+// Extract returns emails from data that pass pre-filters for the active mode.
+// For ModeFiltered, this returns candidate emails; Final selection is done by
+// Collector.Finalize (domain grouping).
 func Extract(data []byte, filePath string, cfg *Config) []string {
 	if len(data) == 0 || cfg == nil {
 		return nil
 	}
-	if cfg.ShouldSkipPath(filePath) {
+	if cfg.Mode != ModeUnfiltered && cfg.ShouldSkipPath(filePath) {
 		return nil
 	}
 
@@ -40,8 +41,14 @@ func Extract(data []byte, filePath string, cfg *Config) []string {
 			continue
 		}
 		local, domain := email[:at], email[at+1:]
-		if keep, _ := cfg.ShouldKeepEmail(local, domain, filePath); !keep {
+		if !cfg.IsCandidate(local, domain, filePath) {
 			continue
+		}
+		// Roles mode: only whitelist locals.
+		if cfg.Mode == ModeRoles {
+			if _, ok := cfg.InterestingUsernames[local]; !ok {
+				continue
+			}
 		}
 		if _, ok := seen[email]; ok {
 			continue
@@ -50,4 +57,14 @@ func Extract(data []byte, filePath string, cfg *Config) []string {
 		out = append(out, email)
 	}
 	return out
+}
+
+// SplitEmail returns local-part and domain (lowercased).
+func SplitEmail(email string) (local, domain string, ok bool) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	at := strings.LastIndex(email, "@")
+	if at <= 0 || at == len(email)-1 {
+		return "", "", false
+	}
+	return email[:at], email[at+1:], true
 }

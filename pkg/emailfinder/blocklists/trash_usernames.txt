@@ -34,8 +34,16 @@ tester
 testing
 tests
 testuser
+testuser2
 testmail
 testing123
+testforeman
+testdozr
+transmstest
+staging
+stage
+uat
+sandbox
 admin123
 user123
 abc

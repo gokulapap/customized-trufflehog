@@ -473,3 +473,25 @@ yahoo.fr
 yahoo.de
 outlook.fr
 outlook.de
+
+# FOSS / runtime contributor noise often baked into Node/OpenSSL trees
+chromium.org
+keybase.io
+janeasystems.com
+bnoordhuis.nl
+stephenbelanger.com
+hiroppy.me
+addaleax.net
+joyent.com
+nodejs.org
+openjsf.org
+npm.im
+ioredis.io
+jd.jd
+gserviceaccount.com
+alpinelinux.org
+sourceware.org
+openwall.com
+learnboost.com
+spam.raszi.hu
+raszi.hu
