@@ -1188,6 +1188,7 @@ const (
 	DetectorType_TerraformStateFile DetectorType = 1077
 	DetectorType_WpConfigFile       DetectorType = 1078
 	DetectorType_ShellHistoryFile   DetectorType = 1079
+	DetectorType_EmailFinder         DetectorType = 1080
 )
 
 // Enum value maps for DetectorType.
@@ -2269,6 +2270,7 @@ var (
 		1077: "TerraformStateFile",
 		1078: "WpConfigFile",
 		1079: "ShellHistoryFile",
+		1080: "EmailFinder",
 	}
 	DetectorType_value = map[string]int32{
 		"Alibaba":                               0,
@@ -3347,6 +3349,7 @@ var (
 		"TerraformStateFile":                1077,
 		"WpConfigFile":                      1078,
 		"ShellHistoryFile":                  1079,
+		"EmailFinder":                      1080,
 	}
 )
 

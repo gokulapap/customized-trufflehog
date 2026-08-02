@@ -30,6 +30,8 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/config"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/context"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
+	emailfinderscanner "github.com/trufflesecurity/trufflehog/v3/pkg/detectors/emailfinder"
+	"github.com/trufflesecurity/trufflehog/v3/pkg/emailfinder"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/engine"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/engine/defaults"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/feature"
@@ -90,6 +92,17 @@ var (
 	forceSkipArchives  = cli.Flag("force-skip-archives", "Force skipping archives.").Bool()
 	skipAdditionalRefs = cli.Flag("skip-additional-refs", "Skip additional references.").Bool()
 	userAgentSuffix    = cli.Flag("user-agent-suffix", "Suffix to add to User-Agent.").String()
+
+	// Customized fork: email finder (opt-in)
+	findEmails              = cli.Flag("find-emails", "Find unique emails and print a comma-separated list after the scan.").Bool()
+	emailUsernamesFile      = cli.Flag("email-usernames-file", "Replace default interesting contact usernames (support, devops, …) with this newline-separated file.").String()
+	emailTrashUsernamesFile = cli.Flag("email-trash-usernames-file", "Replace default trash local-parts (noreply, test, …) with this newline-separated file.").String()
+	emailDomainsFile        = cli.Flag("email-domains-file", "Replace default blocked email domains with this newline-separated file.").String()
+	emailPathsFile          = cli.Flag("email-paths-file", "Replace default email path excludes with this newline-separated glob file.").String()
+	emailExtraUsernamesFile = cli.Flag("email-extra-usernames-file", "Append extra interesting contact usernames to the defaults.").String()
+	emailExtraTrashFile     = cli.Flag("email-extra-trash-usernames-file", "Append extra trash local-parts to the defaults.").String()
+	emailExtraDomainsFile   = cli.Flag("email-extra-domains-file", "Append extra blocked email domains to the defaults.").String()
+	emailExtraPathsFile     = cli.Flag("email-extra-paths-file", "Append extra email path exclude globs to the defaults.").String()
 
 	gitScan                = cli.Command("git", "Find credentials in git repositories.")
 	gitScanURI             = gitScan.Arg("uri", "Git repository URL. https://, file://, or ssh:// schema expected.").Required().String()
@@ -526,6 +539,33 @@ func run(state overseer.State) {
 
 	verificationCacheMetrics := verificationcache.InMemoryMetrics{}
 
+	detectorsList := append(defaults.DefaultDetectors(), conf.Detectors...)
+	var emailCollector *emailfinder.Collector
+	if *findEmails {
+		emailCfg, err := emailfinder.LoadConfig(emailfinder.Options{
+			UsernamesFile:           *emailUsernamesFile,
+			TrashUsernamesFile:      *emailTrashUsernamesFile,
+			DomainsFile:             *emailDomainsFile,
+			PathsFile:               *emailPathsFile,
+			ExtraUsernamesFile:      *emailExtraUsernamesFile,
+			ExtraTrashUsernamesFile: *emailExtraTrashFile,
+			ExtraDomainsFile:        *emailExtraDomainsFile,
+			ExtraPathsFile:          *emailExtraPathsFile,
+		})
+		if err != nil {
+			logFatal(err, "failed to load email finder config")
+		}
+		emailCollector = emailfinder.NewCollector()
+		detectorsList = append(detectorsList, &emailfinderscanner.Scanner{
+			Config:    emailCfg,
+			Collector: emailCollector,
+		})
+		// Keep EmailFinder active even when a custom include-detectors list is set.
+		if *includeDetectors != "" && !strings.EqualFold(*includeDetectors, "all") {
+			*includeDetectors = *includeDetectors + ",EmailFinder"
+		}
+	}
+
 	engConf := engine.Config{
 		Concurrency:       *concurrency,
 		ConfiguredSources: conf.Sources,
@@ -533,7 +573,7 @@ func run(state overseer.State) {
 		// default detectors, which can be further filtered by the
 		// user. The filters are applied by the engine and are only
 		// subtractive.
-		Detectors:                append(defaults.DefaultDetectors(), conf.Detectors...),
+		Detectors:                detectorsList,
 		Verify:                   !*noVerification,
 		IncludeDetectors:         *includeDetectors,
 		ExcludeDetectors:         *excludeDetectors,
@@ -599,6 +639,16 @@ func run(state overseer.State) {
 		"trufflehog_version", version.BuildVersion,
 		"verification_caching", verificationCacheMetricsSnapshot,
 	)
+
+	if emailCollector != nil {
+		emails := emailCollector.CommaSeparated()
+		if emails != "" {
+			fmt.Fprintf(os.Stdout, "emails: %s\n", emails)
+		} else {
+			fmt.Fprintf(os.Stdout, "emails: \n")
+		}
+		logger.Info("email finder summary", "unique_emails", emailCollector.Count())
+	}
 
 	if metrics.hasFoundResults && *fail {
 		logger.V(2).Info("exiting with code 183 because results were found")

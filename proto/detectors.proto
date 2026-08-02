@@ -1093,6 +1093,7 @@ enum DetectorType {
   TerraformStateFile = 1077;
   WpConfigFile = 1078;
   ShellHistoryFile = 1079;
+  EmailFinder = 1080;
 }
 
 message Result {
