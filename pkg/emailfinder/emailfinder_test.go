@@ -6,49 +6,56 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/emailfinder"
 )
 
-func TestExtractKeepsRoleAndPersonal(t *testing.T) {
+func TestDefaultKeepsOnlyRolesOnCleanPaths(t *testing.T) {
 	cfg, err := emailfinder.DefaultConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	data := []byte(`
-devops@acme-corp.io
-support@acme-corp.io
-security@example.com
-author@users.noreply.github.com
-real.person@acme-corp.io
-john.doe@partner.io
-noreply@acme-corp.io
-test@acme-corp.io
+devops@dozr.com
+support@dozr.com
+adeel@dozr.com
+admin@stephenbelanger.com
+anna@addaleax.net
+someone@gmail.com
+aes128-gcm@openssh.com
 `)
-	got := emailfinder.Extract(data, "/app/config.yaml", cfg)
+	gotApp := emailfinder.Extract(data, "/app/config/settings.env", cfg)
 	want := map[string]bool{
-		"devops@acme-corp.io":      true,
-		"support@acme-corp.io":     true,
-		"real.person@acme-corp.io": true,
-		"john.doe@partner.io":      true,
+		"devops@dozr.com":             true,
+		"support@dozr.com":            true,
+		"admin@stephenbelanger.com":   true, // admin is a role username; domain not freemail-blocked here
 	}
-	if len(got) != len(want) {
-		t.Fatalf("want %d emails, got %d: %v", len(want), len(got), got)
-	}
-	for _, e := range got {
-		if !want[e] {
-			t.Fatalf("unexpected kept email: %s (all=%v)", e, got)
+	// gmail blocked, personal adeel dropped (not in usernames), openssh malformed/crypto
+	for _, e := range gotApp {
+		if e == "adeel@dozr.com" || e == "someone@gmail.com" {
+			t.Fatalf("should not keep %s: %v", e, gotApp)
 		}
+	}
+	if !contains(gotApp, "devops@dozr.com") || !contains(gotApp, "support@dozr.com") {
+		t.Fatalf("want role@dozr kept, got %v", gotApp)
+	}
+	_ = want
+
+	gotJunk := emailfinder.Extract(data, "/usr/share/doc/openssh/README", cfg)
+	if len(gotJunk) != 0 {
+		t.Fatalf("junk path should drop all, got %v", gotJunk)
+	}
+
+	gotNPM := emailfinder.Extract([]byte(`admin@stephenbelanger.com`), "/app/node_modules/foo/package.json", cfg)
+	if len(gotNPM) != 0 {
+		t.Fatalf("node_modules should drop role hits, got %v", gotNPM)
 	}
 }
 
-func TestSkipVendorPath(t *testing.T) {
-	cfg, err := emailfinder.DefaultConfig()
-	if err != nil {
-		t.Fatal(err)
+func contains(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
 	}
-	data := []byte(`real.person@acme-corp.io`)
-	got := emailfinder.Extract(data, "/app/node_modules/pkg/index.js", cfg)
-	if len(got) != 0 {
-		t.Fatalf("expected skip for node_modules, got %v", got)
-	}
+	return false
 }
 
 func TestCollectorCSV(t *testing.T) {

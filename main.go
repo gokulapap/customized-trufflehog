@@ -95,6 +95,7 @@ var (
 
 	// Customized fork: email finder (opt-in)
 	findEmails              = cli.Flag("find-emails", "Find unique emails and print a comma-separated list after the scan.").Bool()
+	emailMode               = cli.Flag("email-mode", "Email filter mode: filtered/roles (default: only usernames.txt on non-junk paths), all.").Default("filtered").Enum("filtered", "roles", "all")
 	emailUsernamesFile      = cli.Flag("email-usernames-file", "Replace default interesting contact usernames (support, devops, …) with this newline-separated file.").String()
 	emailTrashUsernamesFile = cli.Flag("email-trash-usernames-file", "Replace default trash local-parts (noreply, test, …) with this newline-separated file.").String()
 	emailDomainsFile        = cli.Flag("email-domains-file", "Replace default blocked email domains with this newline-separated file.").String()
@@ -543,6 +544,7 @@ func run(state overseer.State) {
 	var emailCollector *emailfinder.Collector
 	if *findEmails {
 		emailCfg, err := emailfinder.LoadConfig(emailfinder.Options{
+			Mode:                    emailfinder.ParseMode(*emailMode),
 			UsernamesFile:           *emailUsernamesFile,
 			TrashUsernamesFile:      *emailTrashUsernamesFile,
 			DomainsFile:             *emailDomainsFile,

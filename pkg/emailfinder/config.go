@@ -27,19 +27,22 @@ var defaultPaths []byte
 
 // Config holds filter configuration. Lists are replaceable / appendable via Options.
 type Config struct {
+	Mode Mode
 	// InterestingUsernames are role/contact locals the user wants kept
 	// (support, devops, …). Maintained in usernames.txt. Personal emails
-	// like john.doe@ are kept without being on this list.
+	// like john.doe@ are kept in filtered mode without being on this list.
 	InterestingUsernames map[string]struct{}
 	// TrashUsernames are junk locals always dropped (noreply, test, foo, …).
-	TrashUsernames map[string]struct{}
-	BlockedDomains map[string]struct{}
-	ExcludePaths   []glob.Glob
+	TrashUsernames  map[string]struct{}
+	BlockedDomains  map[string]struct{}
+	ExcludePaths    []glob.Glob
 	rawPathPatterns []string
 }
 
 // Options configures how Config is loaded.
 type Options struct {
+	Mode Mode
+
 	// Replace embedded interesting usernames (usernames.txt).
 	UsernamesFile string
 	// Replace embedded trash usernames.
@@ -64,9 +67,13 @@ func DefaultConfig() (*Config, error) {
 // LoadConfig builds a Config from embedded defaults and optional override/extra files.
 func LoadConfig(opts Options) (*Config, error) {
 	cfg := &Config{
+		Mode:                 ModeFiltered,
 		InterestingUsernames: make(map[string]struct{}),
 		TrashUsernames:       make(map[string]struct{}),
 		BlockedDomains:       make(map[string]struct{}),
+	}
+	if opts.Mode != "" {
+		cfg.Mode = opts.Mode
 	}
 
 	interesting := defaultInterestingUsernames
@@ -175,9 +182,13 @@ func parseLines(data []byte) []string {
 	return out
 }
 
-// ShouldSkipPath reports whether emails from filePath should be ignored.
+// ShouldSkipPath reports whether emails from filePath should be ignored as junk/vendor paths.
+// Unknown/empty paths are treated as untrusted (skipped) so role hits require a real app path.
 func (c *Config) ShouldSkipPath(filePath string) bool {
-	if c == nil || filePath == "" || len(c.ExcludePaths) == 0 {
+	if filePath == "" {
+		return true
+	}
+	if c == nil || len(c.ExcludePaths) == 0 {
 		return false
 	}
 	normalized := filepath.ToSlash(filePath)
@@ -189,42 +200,68 @@ func (c *Config) ShouldSkipPath(filePath string) bool {
 	return false
 }
 
-// IsBlockedEmail reports whether localPart@domain should be filtered out.
-// Interesting role usernames (usernames.txt) are never dropped for local-part
-// reasons. Personal emails are kept unless domain/path/trash filters apply.
-func (c *Config) IsBlockedEmail(localPart, domain string) (bool, string) {
+// ShouldKeepEmail reports whether localPart@domain from filePath should be kept.
+func (c *Config) ShouldKeepEmail(localPart, domain, filePath string) (bool, string) {
 	if c == nil {
-		return false, ""
+		return false, "nil config"
 	}
 	local := strings.ToLower(strings.TrimSpace(localPart))
 	dom := strings.ToLower(strings.TrimSpace(domain))
 
 	if local == "" || dom == "" {
-		return true, "empty"
+		return false, "empty"
+	}
+	if !IsWellFormed(local, dom) {
+		return false, "malformed"
 	}
 
 	if _, ok := c.BlockedDomains[dom]; ok {
-		return true, "blocked domain"
+		return false, "blocked domain"
 	}
 	for blocked := range c.BlockedDomains {
 		if strings.HasSuffix(dom, "."+blocked) {
-			return true, "blocked domain suffix"
+			return false, "blocked domain suffix"
 		}
 	}
 
-	// Role/contact locals from usernames.txt always stay (domain already OK).
-	if _, interesting := c.InterestingUsernames[local]; interesting {
-		return false, ""
-	}
+	_, interesting := c.InterestingUsernames[local]
+	_, trash := c.TrashUsernames[local]
+	noreply := strings.Contains(local, "noreply") || strings.Contains(local, "no-reply") ||
+		strings.Contains(local, "donotreply") || strings.Contains(local, "do-not-reply")
+	junkPath := c.ShouldSkipPath(filePath)
 
-	if _, ok := c.TrashUsernames[local]; ok {
-		return true, "trash username"
+	switch c.Mode {
+	case ModeAll:
+		if trash || noreply {
+			return false, "trash username"
+		}
+		if junkPath {
+			return false, "junk path"
+		}
+		return true, "all"
+
+	case ModeRoles, ModeFiltered:
+		// Default: only usernames.txt locals from non-junk paths on non-blocked/non-freemail domains.
+		if !interesting {
+			return false, "not in usernames whitelist"
+		}
+		if trash || noreply {
+			return false, "trash username"
+		}
+		if junkPath {
+			return false, "junk path"
+		}
+		return true, "role on clean path"
+
+	default:
+		return false, "unknown mode"
 	}
-	if strings.Contains(local, "noreply") || strings.Contains(local, "no-reply") ||
-		strings.Contains(local, "donotreply") || strings.Contains(local, "do-not-reply") {
-		return true, "noreply local-part"
-	}
-	return false, ""
+}
+
+// IsBlockedEmail is kept for callers; prefer ShouldKeepEmail.
+func (c *Config) IsBlockedEmail(localPart, domain, filePath string) (bool, string) {
+	ok, reason := c.ShouldKeepEmail(localPart, domain, filePath)
+	return !ok, reason
 }
 
 // Collector accumulates unique emails across a scan (thread-safe).

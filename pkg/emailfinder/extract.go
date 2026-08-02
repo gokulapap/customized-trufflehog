@@ -40,7 +40,7 @@ func Extract(data []byte, filePath string, cfg *Config) []string {
 			continue
 		}
 		local, domain := email[:at], email[at+1:]
-		if blocked, _ := cfg.IsBlockedEmail(local, domain); blocked {
+		if keep, _ := cfg.ShouldKeepEmail(local, domain, filePath); !keep {
 			continue
 		}
 		if _, ok := seen[email]; ok {
