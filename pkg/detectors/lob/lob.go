@@ -86,11 +86,13 @@ func (s Scanner) verify(ctx context.Context, key string) (bool, error) {
 	}
 	defer func() { _ = res.Body.Close() }()
 	switch res.StatusCode {
-	case http.StatusForbidden, http.StatusUnprocessableEntity:
-		// 403 indicates key is active but no billing method on file
-		// 422 indicates key is active but request body is invalid
+	case http.StatusOK, http.StatusCreated:
+		// Verification accepted (key is valid/active).
 		return true, nil
 	case http.StatusUnauthorized:
+		return false, nil
+	case http.StatusForbidden, http.StatusUnprocessableEntity:
+		// Lob responded but did not accept verification. Treat as unverified.
 		return false, nil
 	default:
 		return false, fmt.Errorf("unexpected status code: %d", res.StatusCode)
